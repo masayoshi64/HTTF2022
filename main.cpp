@@ -117,9 +117,9 @@ uint64_t my_rand(void) {
 int popcnt(ull x) {
     return __builtin_popcountll(x);
 }
-template <typename T> vector<int> IOTA(vector<T> a) {
+template <typename T> vector<ll> IOTA(vector<T> a) {
     int n = a.size();
-    vector<int> id(n);
+    vector<ll> id(n);
     iota(all(id), 0);
     sort(all(id), [&](int i, int j) { return a[i] < a[j]; });
     return id;
@@ -298,6 +298,13 @@ const long double PI = 3.141592653589793;
 vl dx = {1, 0, -1, 0};
 vl dy = {0, 1, 0, -1};
 using mint = modint<mod>;
+
+// main
+random_device rnd; // 非決定的な乱数生成器でシード生成機を生成
+mt19937 mt(rnd());
+normal_distribution<> ndist(0.0, 1.0);
+uniform_real_distribution<> udist(20, 60);
+
 void output(vl &a, vl &b) {
     assert(a.size() == b.size());
     ll m = a.size();
@@ -310,22 +317,147 @@ void output(vl &a, vl &b) {
 
 struct Task {
     ll id, dsm, indeg, outdeg, priority;
-    Task(ll id, ll dsm, ll indeg, ll outdeg) : id(id), dsm(dsm), indeg(indeg), outdeg(outdeg) {
-        priority = outdeg;
+    Task(ll id, ll priority) : id(id), priority(priority) {
     }
 };
 
 bool operator<(const Task &t1, const Task &t2) {
     return t1.priority < t2.priority;
 };
-bool operator>(const Task &t1, const Task &t2) {
-    return t2 < t1;
+
+struct Member {
+    ll id;
+    ll priority;
+    Member(ll id, ll p) : id(id), priority(p) {
+    }
+};
+
+bool operator<(const Member &t1, const Member &t2) {
+    return t1.priority < t2.priority;
+};
+
+vl generate_s(int k) {
+    vector<double> s(k);
+    double sm = 0;
+    rep(i, k) {
+        s[i] = abs(ndist(mt));
+        sm += s[i] * s[i];
+    }
+    vl res(k);
+    double coef = udist(mt) / sqrt(sm);
+    rep(i, k) {
+        res[i] = round(coef * s[i]);
+    }
+    return res;
 }
-bool operator<=(const Task &t1, const Task &t2) {
-    return !(t1 > t2);
+
+ll calc_required_days(vl s, vl d) {
+    ll w = 0;
+    ll k = s.size();
+    rep(i, k) {
+        w += max(0ll, d[i] - s[i]);
+    }
+    return max(1ll, w);
 }
-bool operator>=(const Task &t1, const Task &t2) {
-    return !(t1 < t2);
+
+ll simulate(vl &priority, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl in_deg) {
+    ll can_work_num = m;
+    priority_queue<Task> can_begin;
+    mat<ll> yoyaku(2001);
+
+    rep(i, n) {
+        if (in_deg[i] == 0) {
+            yoyaku[1].pb(i);
+        }
+    }
+
+    ll finished_num = 0;
+    rep(day, 1, 2001) {
+        for (ll tid : yoyaku[day]) {
+            Task task(tid, priority[tid]);
+            can_begin.push(task);
+            can_work_num++;
+            finished_num++;
+        }
+        if (finished_num == n) {
+            return n + 2000 - day;
+        }
+        while (!can_begin.empty() && can_work_num > 0) {
+            ll tid = can_begin.top().id;
+            can_begin.pop();
+            can_work_num--;
+
+            vl s = generate_s(k);
+            ll rd = calc_required_days(s, d[tid]);
+            for (auto &e : g.g[tid]) {
+                in_deg[e.to]--;
+                if (in_deg[e.to] == 0 && day + rd <= 2000) {
+                    yoyaku[day + rd].pb(e.to);
+                }
+            }
+        }
+    }
+    return finished_num;
+}
+
+template <typename T, typename S> T calc_score(S &state, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl &in_deg) {
+
+    //パラメータ
+    ll iter_num = 50;
+
+    ll ave = 0;
+    rep(i, iter_num) {
+        ave += simulate(state, n, m, k, d, g, in_deg);
+    }
+    ave /= iter_num;
+    return ave;
+}
+
+template <typename S> S modify(S state) {
+    ll n = state.size();
+    rep(_, 10) {
+        ll i = my_rand() % n;
+        ll j = my_rand() % n;
+        swap(state[i], state[j]);
+    }
+    return state;
+}
+
+template <typename T, typename S>
+S annealing(S &initial_state, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl &in_deg) {
+
+    // パラメータ
+    double TIME_LIMIT = 2800; // 3000;
+    double start_temp = 50, end_temp = 10;
+
+    S state = initial_state;
+    S best_state = initial_state;
+    T best_score = -(numeric_limits<T>::max() / 2);
+    Timer timer;
+    timer.start(); // 開始時刻
+    uniform_real_distribution<> uniform01(0, 1);
+    while (true) { // 時間の許す限り回す
+        double lap = timer.lap();
+        if (lap > TIME_LIMIT)
+            break;
+
+        S new_state = state;
+        modify(new_state);
+        T new_score = calc_score<T, S>(new_state, n, m, k, d, g, in_deg);
+        T pre_score = calc_score<T, S>(state, n, m, k, d, g, in_deg);
+
+        double temp = start_temp + (end_temp - start_temp) * lap / TIME_LIMIT;
+        double prob = exp((double)(new_score - pre_score) / temp);
+        // cerr << prob << endl;
+
+        if (prob > uniform01(mt)) {
+            state = new_state;
+            if (chmax(best_score, new_score)) {
+                best_state = state;
+            }
+        }
+    }
+    return best_state;
 }
 
 int main() {
@@ -333,7 +465,7 @@ int main() {
     ios::sync_with_stdio(0);
     cout << setprecision(30) << fixed;
 
-    // 初期入力
+    // 入力
     ll n, m, k, r;
     cin >> n >> m >> k >> r;
     mat<ll> d(n, vl(k));
@@ -347,11 +479,7 @@ int main() {
         g.add_directed_edge(u, v);
     }
 
-    // タスク管理
-    vl dsum(n);
-    rep(i, n) {
-        dsum[i] = vsum(d[i]);
-    }
+    // 前処理
     vl in_deg(n, 0), out_deg(n, 0);
     rep(i, n) {
         for (auto e : g.g[i]) {
@@ -359,18 +487,24 @@ int main() {
             out_deg[e.from]++;
         }
     }
-    auto construct_task = [&](int i) { return Task(i, dsum[i], in_deg[i], out_deg[i]); };
+
+    //　メイン処理
+    // タスクのpriorityを定める
+    vl ids = IOTA(out_deg);
+    vl initial_state(n);
+    rep(i, n) initial_state[ids[i]] = i;
+    vl priority = annealing<ll, vl>(initial_state, n, m, k, d, g, in_deg);
+
+    // 使用できるタスク、メンバーの初期化
     priority_queue<Task> can_begin;
     rep(i, n) {
         if (in_deg[i] == 0)
-            can_begin.emplace(construct_task(i));
+            can_begin.emplace(i, priority[i]);
     }
-
-    // メンバー管理
-    vl can_work(m);
-    iota(all(can_work), 0);
-
-    // utils
+    priority_queue<Member> can_work;
+    rep(i, m) {
+        can_work.emplace(i, my_rand());
+    }
     vl member_to_task(m);
 
     while (true) {
@@ -379,37 +513,40 @@ int main() {
         ll member_num = can_work.size();
         vl tasks;
         vl members;
+
+        // 今日割り振るタスク、メンバーをpriorityに従い選定
         rep(i, min(task_num, member_num)) {
-            ll task = can_begin.top().id;
-            tasks.pb(task);
+            ll tid = can_begin.top().id;
+            tasks.pb(tid);
             can_begin.pop();
-            ll mem = can_work.back();
-            members.pb(mem);
-            can_work.pop_back();
-            member_to_task[mem] = task;
+            ll mid = can_work.top().id;
+            members.pb(mid);
+            can_work.pop();
+            member_to_task[mid] = tid;
         }
         output(members, tasks);
 
         // 入力
         ll end_num;
         cin >> end_num;
-        if (end_num == -1) {
-            return 0;
-        }
+
         vl f(end_num);
         scan(f);
         for (ll ff : f) {
             ff--;
-            can_work.pb(ff);
+            can_work.emplace(ff, my_rand());
             for (auto &e : g.g[member_to_task[ff]]) {
                 in_deg[e.to]--;
-                if (in_deg[e.to] == 0)
-                    can_begin.emplace(construct_task(e.to));
+                if (in_deg[e.to] == 0) {
+                    // ランダムなpriority
+                    can_begin.emplace(e.to, priority[e.to]);
+                }
             }
         }
     }
 }
 
 /* memo
-out_degでソートしてみた
+out_degでソートしてみた 75529
+メンバーをランダムに選出 77562
 */
