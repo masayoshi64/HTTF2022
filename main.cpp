@@ -307,6 +307,27 @@ void output(vl &a, vl &b) {
     }
     cout << endl;
 }
+
+struct Task {
+    ll id, dsm, indeg, outdeg, priority;
+    Task(ll id, ll dsm, ll indeg, ll outdeg) : id(id), dsm(dsm), indeg(indeg), outdeg(outdeg) {
+        priority = outdeg;
+    }
+};
+
+bool operator<(const Task &t1, const Task &t2) {
+    return t1.priority < t2.priority;
+};
+bool operator>(const Task &t1, const Task &t2) {
+    return t2 < t1;
+}
+bool operator<=(const Task &t1, const Task &t2) {
+    return !(t1 > t2);
+}
+bool operator>=(const Task &t1, const Task &t2) {
+    return !(t1 < t2);
+}
+
 int main() {
     cin.tie(0);
     ios::sync_with_stdio(0);
@@ -326,17 +347,23 @@ int main() {
         g.add_directed_edge(u, v);
     }
 
-    // 依存関係
-    vl in_deg(n, 0);
+    // タスク管理
+    vl dsum(n);
+    rep(i, n) {
+        dsum[i] = vsum(d[i]);
+    }
+    vl in_deg(n, 0), out_deg(n, 0);
     rep(i, n) {
         for (auto e : g.g[i]) {
             in_deg[e.to]++;
+            out_deg[e.from]++;
         }
     }
-    vl can_begin;
+    auto construct_task = [&](int i) { return Task(i, dsum[i], in_deg[i], out_deg[i]); };
+    priority_queue<Task> can_begin;
     rep(i, n) {
         if (in_deg[i] == 0)
-            can_begin.pb(i);
+            can_begin.emplace(construct_task(i));
     }
 
     // メンバー管理
@@ -345,29 +372,21 @@ int main() {
 
     // utils
     vl member_to_task(m);
-    vl dsum(n);
-    rep(i, n) {
-        dsum[i] = vsum(d[i]);
-    }
-    priority_queue<Pl> dsum_task;
-    for (auto i : can_begin) {
-        dsum_task.emplace(dsum[i], i);
-    }
 
     while (true) {
         // 出力
-        ll task_num = dsum_task.size();
+        ll task_num = can_begin.size();
         ll member_num = can_work.size();
         vl tasks;
         vl members;
         rep(i, min(task_num, member_num)) {
-            ll t = dsum_task.top().second;
-            tasks.pb(t);
-            dsum_task.pop();
-            ll m = can_work.back();
-            members.pb(m);
+            ll task = can_begin.top().id;
+            tasks.pb(task);
+            can_begin.pop();
+            ll mem = can_work.back();
+            members.pb(mem);
             can_work.pop_back();
-            member_to_task[m] = t;
+            member_to_task[mem] = task;
         }
         output(members, tasks);
 
@@ -385,12 +404,12 @@ int main() {
             for (auto &e : g.g[member_to_task[ff]]) {
                 in_deg[e.to]--;
                 if (in_deg[e.to] == 0)
-                    dsum_task.emplace(dsum[e.to], e.to);
+                    can_begin.emplace(construct_task(e.to));
             }
         }
     }
 }
 
 /* memo
-
+out_degでソートしてみた
 */
