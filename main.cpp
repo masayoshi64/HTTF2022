@@ -303,7 +303,7 @@ using mint = modint<mod>;
 random_device rnd; // 非決定的な乱数生成器でシード生成機を生成
 mt19937 mt(rnd());
 normal_distribution<> ndist(0.0, 1.0);
-uniform_real_distribution<> udist(20, 60);
+uniform_real_distribution<> udist_s(20, 60), udist_d(10, 40);
 
 void output(vl &a, vl &b) {
     assert(a.size() == b.size());
@@ -316,8 +316,9 @@ void output(vl &a, vl &b) {
 }
 
 struct Task {
-    ll id, dsm, indeg, outdeg, priority;
-    Task(ll id, ll priority) : id(id), priority(priority) {
+    ll id;
+    ld priority;
+    Task(ll id, ld priority) : id(id), priority(priority) {
     }
 };
 
@@ -327,8 +328,8 @@ bool operator<(const Task &t1, const Task &t2) {
 
 struct Member {
     ll id;
-    ll priority;
-    Member(ll id, ll p) : id(id), priority(p) {
+    ld priority;
+    Member(ll id, ld p) : id(id), priority(p) {
     }
 };
 
@@ -344,9 +345,24 @@ vl generate_s(int k) {
         sm += s[i] * s[i];
     }
     vl res(k);
-    double coef = udist(mt) / sqrt(sm);
+    double coef = udist_s(mt) / sqrt(sm);
     rep(i, k) {
         res[i] = round(coef * s[i]);
+    }
+    return res;
+}
+
+vl generate_d(int k) {
+    vector<double> d(k);
+    double sm = 0;
+    rep(i, k) {
+        d[i] = abs(ndist(mt));
+        sm += d[i] * d[i];
+    }
+    vl res(k);
+    double coef = udist_d(mt) / sqrt(sm);
+    rep(i, k) {
+        res[i] = round(coef * d[i]);
     }
     return res;
 }
@@ -427,7 +443,7 @@ template <typename T, typename S>
 S annealing(S &initial_state, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl &in_deg) {
 
     // パラメータ
-    double TIME_LIMIT = 2800; // 3000;
+    double TIME_LIMIT = 2000; // 3000;
     double start_temp = 50, end_temp = 10;
 
     S state = initial_state;
@@ -464,10 +480,19 @@ int main() {
     cin.tie(0);
     ios::sync_with_stdio(0);
     cout << setprecision(30) << fixed;
-
     // 入力
     ll n, m, k, r;
     cin >> n >> m >> k >> r;
+
+    // calc ave
+    ld ave = 0;
+    rep(i, 100) {
+        auto d = generate_d(k);
+        ave += -calc_required_days(generate_s(k), d) + vsum(d);
+    }
+    ave /= 100;
+    // calc end
+
     mat<ll> d(n, vl(k));
     scan(d);
     Graph<ll> g(n);
@@ -493,7 +518,7 @@ int main() {
     vl ids = IOTA(out_deg);
     vl initial_state(n);
     rep(i, n) initial_state[ids[i]] = i;
-    vl priority = annealing<ll, vl>(initial_state, n, m, k, d, g, in_deg);
+    vl priority(n); // = annealing<ll, vl>(initial_state, n, m, k, d, g, in_deg);
 
     // 使用できるタスク、メンバーの初期化
     priority_queue<Task> can_begin;
@@ -503,11 +528,15 @@ int main() {
     }
     priority_queue<Member> can_work;
     rep(i, m) {
-        can_work.emplace(i, my_rand());
+        can_work.emplace(i, ave);
     }
     vl member_to_task(m);
+    vl member_to_day(m);
 
+    // repetition
+    ll day = 0;
     while (true) {
+        day++;
         // 出力
         ll task_num = can_begin.size();
         ll member_num = can_work.size();
@@ -523,19 +552,21 @@ int main() {
             members.pb(mid);
             can_work.pop();
             member_to_task[mid] = tid;
+            member_to_day[mid] = day;
         }
         output(members, tasks);
-
+        // cerr << can_work.size() << ' ' << can_begin.size() << endl;
         // 入力
         ll end_num;
         cin >> end_num;
 
         vl f(end_num);
         scan(f);
-        for (ll ff : f) {
-            ff--;
-            can_work.emplace(ff, my_rand());
-            for (auto &e : g.g[member_to_task[ff]]) {
+        for (ll mid : f) {
+            mid--;
+            ll tid = member_to_task[mid];
+            can_work.emplace(mid, member_to_day[mid] - vsum(d[tid]));
+            for (auto &e : g.g[tid]) {
                 in_deg[e.to]--;
                 if (in_deg[e.to] == 0) {
                     // ランダムなpriority
