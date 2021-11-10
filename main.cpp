@@ -369,188 +369,7 @@ ll calc_required_days(vl s, vl d) {
     }
     return max(1ll, w);
 }
-template <class Cap, class Cost> struct mcf_graph {
-  public:
-    mcf_graph() {
-    }
-    mcf_graph(int n) : _n(n), g(n) {
-    }
 
-    int add_edge(int from, int to, Cap cap, Cost cost) {
-        assert(0 <= from && from < _n);
-        assert(0 <= to && to < _n);
-        int m = int(pos.size());
-        pos.push_back({from, int(g[from].size())});
-        g[from].push_back(_edge{to, int(g[to].size()), cap, cost});
-        g[to].push_back(_edge{from, int(g[from].size()) - 1, 0, -cost});
-        return m;
-    }
-
-    struct edge {
-        int from, to;
-        Cap cap, flow;
-        Cost cost;
-    };
-
-    edge get_edge(int i) {
-        int m = int(pos.size());
-        assert(0 <= i && i < m);
-        auto _e = g[pos[i].first][pos[i].second];
-        auto _re = g[_e.to][_e.rev];
-        return edge{
-            pos[i].first, _e.to, _e.cap + _re.cap, _re.cap, _e.cost,
-        };
-    }
-    std::vector<edge> edges() {
-        int m = int(pos.size());
-        std::vector<edge> result(m);
-        for (int i = 0; i < m; i++) {
-            result[i] = get_edge(i);
-        }
-        return result;
-    }
-
-    std::pair<Cap, Cost> flow(int s, int t) {
-        return flow(s, t, std::numeric_limits<Cap>::max());
-    }
-    std::pair<Cap, Cost> flow(int s, int t, Cap flow_limit) {
-        return slope(s, t, flow_limit).back();
-    }
-    std::vector<std::pair<Cap, Cost>> slope(int s, int t) {
-        return slope(s, t, std::numeric_limits<Cap>::max());
-    }
-    std::vector<std::pair<Cap, Cost>> slope(int s, int t, Cap flow_limit) {
-        assert(0 <= s && s < _n);
-        assert(0 <= t && t < _n);
-        assert(s != t);
-        // variants (C = maxcost):
-        // -(n-1)C <= dual[s] <= dual[i] <= dual[t] = 0
-        // reduced cost (= e.cost + dual[e.from] - dual[e.to]) >= 0 for all edge
-        std::vector<Cost> dual(_n, 0), dist(_n);
-        std::vector<int> pv(_n), pe(_n);
-        std::vector<bool> vis(_n);
-        auto dual_ref = [&]() {
-            std::fill(dist.begin(), dist.end(), std::numeric_limits<Cost>::max());
-            std::fill(pv.begin(), pv.end(), -1);
-            std::fill(pe.begin(), pe.end(), -1);
-            std::fill(vis.begin(), vis.end(), false);
-            struct Q {
-                Cost key;
-                int to;
-                bool operator<(Q r) const {
-                    return key > r.key;
-                }
-            };
-            std::priority_queue<Q> que;
-            dist[s] = 0;
-            que.push(Q{0, s});
-            while (!que.empty()) {
-                int v = que.top().to;
-                que.pop();
-                if (vis[v])
-                    continue;
-                vis[v] = true;
-                if (v == t)
-                    break;
-                // dist[v] = shortest(s, v) + dual[s] - dual[v]
-                // dist[v] >= 0 (all reduced cost are positive)
-                // dist[v] <= (n-1)C
-                for (int i = 0; i < int(g[v].size()); i++) {
-                    auto e = g[v][i];
-                    if (vis[e.to] || !e.cap)
-                        continue;
-                    // |-dual[e.to] + dual[v]| <= (n-1)C
-                    // cost <= C - -(n-1)C + 0 = nC
-                    Cost cost = e.cost - dual[e.to] + dual[v];
-                    if (dist[e.to] - dist[v] > cost) {
-                        dist[e.to] = dist[v] + cost;
-                        pv[e.to] = v;
-                        pe[e.to] = i;
-                        que.push(Q{dist[e.to], e.to});
-                    }
-                }
-            }
-            if (!vis[t]) {
-                return false;
-            }
-
-            for (int v = 0; v < _n; v++) {
-                if (!vis[v])
-                    continue;
-                // dual[v] = dual[v] - dist[t] + dist[v]
-                //         = dual[v] - (shortest(s, t) + dual[s] - dual[t]) + (shortest(s, v) + dual[s] - dual[v])
-                //         = - shortest(s, t) + dual[t] + shortest(s, v)
-                //         = shortest(s, v) - shortest(s, t) >= 0 - (n-1)C
-                dual[v] -= dist[t] - dist[v];
-            }
-            return true;
-        };
-        Cap flow = 0;
-        Cost cost = 0, prev_cost = -1;
-        std::vector<std::pair<Cap, Cost>> result;
-        result.push_back({flow, cost});
-        while (flow < flow_limit) {
-            if (!dual_ref())
-                break;
-            Cap c = flow_limit - flow;
-            for (int v = t; v != s; v = pv[v]) {
-                c = std::min(c, g[pv[v]][pe[v]].cap);
-            }
-            for (int v = t; v != s; v = pv[v]) {
-                auto &e = g[pv[v]][pe[v]];
-                e.cap -= c;
-                g[v][e.rev].cap += c;
-            }
-            Cost d = -dual[s];
-            flow += c;
-            cost += c * d;
-            if (prev_cost == d) {
-                result.pop_back();
-            }
-            result.push_back({flow, cost});
-            prev_cost = cost;
-        }
-        return result;
-    }
-
-  private:
-    int _n;
-
-    struct _edge {
-        int to, rev;
-        Cap cap;
-        Cost cost;
-    };
-
-    std::vector<std::pair<int, int>> pos;
-    std::vector<std::vector<_edge>> g;
-};
-struct matching {
-    int n, m;
-    mcf_graph<int, int> mcf;
-    matching(int n, int m) : n(n), m(m), mcf(n + m + 2) {
-        rep(i, n) {
-            mcf.add_edge(n + m, i, 1, 0);
-        }
-        rep(i, m) {
-            mcf.add_edge(i + n, n + m + 1, 1, 0);
-        }
-    }
-    void add_edge(int x, int y, int cost) {
-        mcf.add_edge(x, y + n, 1, cost);
-    }
-    vi match() {
-        mcf.flow(n + m, n + m + 1, min(n, m));
-        auto edges = mcf.edges();
-        vi task(n, -1);
-        for (auto edge : edges) {
-            if (edge.from == n + m || edge.to == n + m + 1 || edge.flow == 0)
-                continue;
-            task[edge.from] = edge.to - n;
-        }
-        return task;
-    }
-};
 int main() {
     cin.tie(0);
     ios::sync_with_stdio(0);
@@ -598,9 +417,8 @@ int main() {
     // 使用できるタスク
     priority_queue<Task> can_begin;
     rep(i, n) {
-        if (in_deg[i] == 0) {
+        if (in_deg[i] == 0)
             can_begin.emplace(i, priority[i]);
-        }
     }
 
     //// メンバーの処理
@@ -629,43 +447,39 @@ int main() {
     ll day = 0;
     while (true) {
         day++;
+        // 出力
+        ll task_num = can_begin.size();
+        ll member_num = can_work_list.size();
         vl tasks;
         vl members;
-        // 出力
-        while (!can_begin.empty() && !can_work_list.empty()) {
-            int task_num = can_begin.size();
-            int member_num = can_work_list.size();
-            // 今日割り振るタスク、メンバーをpriorityに従い選定
-            int task_top_num = (1);
-            matching match(task_top_num, member_num);
-            vector<Task> que;
-            rep(i, task_top_num) {
-                Task task = can_begin.top();
-                que.push_back(task);
-                can_begin.pop();
-                rep(j, member_num) {
-                    int mid = can_work_list[j];
-                    match.add_edge(i, j, calc_required_days(cand_s[member_to_cand[mid]], d[task.id]));
-                }
-            }
-            vi t2m = match.match();
-            rep(i, task_top_num) {
-                if (t2m[i] == -1)
-                    can_begin.push(que[i]);
-                else {
-                    tasks.pb(que[i].id);
-                    int tid = que[i].id;
-                    int mid = can_work_list[t2m[i]];
-                    members.pb(mid);
-                    member_to_task[mid] = tid;
-                    member_to_day[mid] = day;
-                }
-            }
-            for (int mid : members) {
-                can_work_list.erase(remove(all(can_work_list), mid), can_work_list.end());
-            }
-        }
 
+        // 今日割り振るタスク、メンバーをpriorityに従い選定
+        rep(i, min(task_num, member_num)) {
+            ll tid = can_begin.top().id;
+            tasks.pb(tid);
+            can_begin.pop();
+
+            int mid = -1;
+            ll mn = INF;
+            vl tmp;
+            for (int m : can_work_list) {
+                if (chmin(mn, calc_required_days(cand_s[member_to_cand[m]], d[tid]))) {
+                    if (mid != -1)
+                        tmp.pb(mid);
+                    mid = m;
+                } else {
+                    tmp.pb(m);
+                }
+            }
+            members.pb(mid);
+            task_cnt[mid]++;
+            swap(can_work_list, tmp);
+
+            // can_work.pop();
+            member_to_task[mid] = tid;
+            member_to_day[mid] = day;
+        }
+        // 出力
         output(members, tasks);
 
         // 入力
@@ -695,14 +509,13 @@ int main() {
                     can_begin.emplace(e.to, priority[e.to]);
                 }
             }
+            // output estimated s
+            cout << "#s " << mid + 1 << " ";
+            rep(i, k) {
+                cout << cand_s[member_to_cand[mid]][i] << ' ';
+            }
+            cout << endl;
         }
-
-        // output estimated s
-        // cout << "#s " << mid + 1 << " ";
-        // rep(i, k) {
-        //     cout << cand_s[member_to_cand[mid]][i] << ' ';
-        // }
-        // cout << endl;
     }
 }
 
