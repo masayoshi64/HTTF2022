@@ -292,12 +292,6 @@ template <int Mod> struct modint {
 #define inf 1000000000ll
 #define INF 4000000004000000000LL
 #define mod 998244353ll
-//#define endl '\n'
-const long double eps = 0.000000000000001;
-const long double PI = 3.141592653589793;
-vl dx = {1, 0, -1, 0};
-vl dy = {0, 1, 0, -1};
-using mint = modint<mod>;
 
 // main
 random_device rnd; // 非決定的な乱数生成器でシード生成機を生成
@@ -376,106 +370,6 @@ ll calc_required_days(vl s, vl d) {
     return max(1ll, w);
 }
 
-ll simulate(vl &priority, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl in_deg) {
-    ll can_work_num = m;
-    priority_queue<Task> can_begin;
-    mat<ll> yoyaku(2001);
-
-    rep(i, n) {
-        if (in_deg[i] == 0) {
-            yoyaku[1].pb(i);
-        }
-    }
-
-    ll finished_num = 0;
-    rep(day, 1, 2001) {
-        for (ll tid : yoyaku[day]) {
-            Task task(tid, priority[tid]);
-            can_begin.push(task);
-            can_work_num++;
-            finished_num++;
-        }
-        if (finished_num == n) {
-            return n + 2000 - day;
-        }
-        while (!can_begin.empty() && can_work_num > 0) {
-            ll tid = can_begin.top().id;
-            can_begin.pop();
-            can_work_num--;
-
-            vl s = generate_s(k);
-            ll rd = calc_required_days(s, d[tid]);
-            for (auto &e : g.g[tid]) {
-                in_deg[e.to]--;
-                if (in_deg[e.to] == 0 && day + rd <= 2000) {
-                    yoyaku[day + rd].pb(e.to);
-                }
-            }
-        }
-    }
-    return finished_num;
-}
-
-template <typename T, typename S> T calc_score(S &state, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl &in_deg) {
-
-    //パラメータ
-    ll iter_num = 50;
-
-    ll ave = 0;
-    rep(i, iter_num) {
-        ave += simulate(state, n, m, k, d, g, in_deg);
-    }
-    ave /= iter_num;
-    return ave;
-}
-
-template <typename S> S modify(S state) {
-    ll n = state.size();
-    rep(_, 10) {
-        ll i = my_rand() % n;
-        ll j = my_rand() % n;
-        swap(state[i], state[j]);
-    }
-    return state;
-}
-
-template <typename T, typename S>
-S annealing(S &initial_state, ll n, ll m, ll k, mat<ll> &d, Graph<ll> &g, vl &in_deg) {
-
-    // パラメータ
-    double TIME_LIMIT = 2000; // 3000;
-    double start_temp = 50, end_temp = 10;
-
-    S state = initial_state;
-    S best_state = initial_state;
-    T best_score = -(numeric_limits<T>::max() / 2);
-    Timer timer;
-    timer.start(); // 開始時刻
-    uniform_real_distribution<> uniform01(0, 1);
-    while (true) { // 時間の許す限り回す
-        double lap = timer.lap();
-        if (lap > TIME_LIMIT)
-            break;
-
-        S new_state = state;
-        modify(new_state);
-        T new_score = calc_score<T, S>(new_state, n, m, k, d, g, in_deg);
-        T pre_score = calc_score<T, S>(state, n, m, k, d, g, in_deg);
-
-        double temp = start_temp + (end_temp - start_temp) * lap / TIME_LIMIT;
-        double prob = exp((double)(new_score - pre_score) / temp);
-        // cerr << prob << endl;
-
-        if (prob > uniform01(mt)) {
-            state = new_state;
-            if (chmax(best_score, new_score)) {
-                best_state = state;
-            }
-        }
-    }
-    return best_state;
-}
-
 int main() {
     cin.tie(0);
     ios::sync_with_stdio(0);
@@ -483,15 +377,6 @@ int main() {
     // 入力
     ll n, m, k, r;
     cin >> n >> m >> k >> r;
-
-    // calc ave
-    ld ave = 0;
-    rep(i, 100) {
-        auto d = generate_d(k);
-        ave += -calc_required_days(generate_s(k), d) + vsum(d);
-    }
-    ave /= 100;
-    // calc end
 
     mat<ll> d(n, vl(k));
     scan(d);
@@ -505,41 +390,66 @@ int main() {
     }
 
     // 前処理
-    vl in_deg(n, 0), out_deg(n, 0);
+    vl in_deg(n, 0); //, out_deg(n, 0);
     rep(i, n) {
         for (auto e : g.g[i]) {
             in_deg[e.to]++;
-            out_deg[e.from]++;
+            // out_deg[e.from]++;
         }
     }
 
-    //　メイン処理
-    // タスクのpriorityを定める
-    vl ids = IOTA(out_deg);
-    vl initial_state(n);
-    rep(i, n) initial_state[ids[i]] = i;
-    vl priority(n); // = annealing<ll, vl>(initial_state, n, m, k, d, g, in_deg);
+    //// タスクの処理
 
-    // 使用できるタスク、メンバーの初期化
+    // タスクのpriority
+    vl priority(n);
+    auto dfs = [&](int v, auto &dfs) -> ll {
+        if (priority[v] > 0)
+            return priority[v];
+        ll res = 1;
+        for (auto e : g.g[v]) {
+            res += dfs(e.to, dfs);
+        }
+        priority[v] = res;
+        return res;
+    };
+    rep(i, n) dfs(i, dfs);
+
+    // 使用できるタスク
     priority_queue<Task> can_begin;
     rep(i, n) {
         if (in_deg[i] == 0)
             can_begin.emplace(i, priority[i]);
     }
-    priority_queue<Member> can_work;
+
+    //// メンバーの処理
+    // priority_queue<Member> can_work;
+    vl can_work_list;
     rep(i, m) {
-        can_work.emplace(i, ave);
+        // can_work.emplace(i, 0);
+        can_work_list.pb(i);
     }
     vl member_to_task(m);
     vl member_to_day(m);
 
-    // repetition
+    // sの候補を生成
+    int num_cand = 30000;
+    vl member_to_cand(m);
+    mat<ll> similarity(m, vl(num_cand));
+    mat<ll> cand_s(num_cand);
+    rep(i, num_cand) {
+        cand_s[i] = generate_s(k);
+    }
+
+    // メンバーが何回使われたか
+    vi task_cnt(m);
+
+    // ループ
     ll day = 0;
     while (true) {
         day++;
         // 出力
         ll task_num = can_begin.size();
-        ll member_num = can_work.size();
+        ll member_num = can_work_list.size();
         vl tasks;
         vl members;
 
@@ -548,14 +458,30 @@ int main() {
             ll tid = can_begin.top().id;
             tasks.pb(tid);
             can_begin.pop();
-            ll mid = can_work.top().id;
+
+            int mid = -1;
+            ll mn = INF;
+            vl tmp;
+            for (int m : can_work_list) {
+                if (chmin(mn, calc_required_days(cand_s[member_to_cand[m]], d[tid]))) {
+                    if (mid != -1)
+                        tmp.pb(mid);
+                    mid = m;
+                } else {
+                    tmp.pb(m);
+                }
+            }
             members.pb(mid);
-            can_work.pop();
+            task_cnt[mid]++;
+            swap(can_work_list, tmp);
+
+            // can_work.pop();
             member_to_task[mid] = tid;
             member_to_day[mid] = day;
         }
+        // 出力
         output(members, tasks);
-        // cerr << can_work.size() << ' ' << can_begin.size() << endl;
+
         // 入力
         ll end_num;
         cin >> end_num;
@@ -565,15 +491,32 @@ int main() {
         for (ll mid : f) {
             mid--;
             ll tid = member_to_task[mid];
-            can_work.emplace(mid, member_to_day[mid] - vsum(d[tid]));
+            // can_work.emplace(mid, member_to_day[mid] - vsum(d[tid]));
+            can_work_list.pb(mid);
+
+            // candidateに重みづけ
+            ll kikan = day - member_to_day[mid];
+            ll mx = -INF;
+            rep(sid, num_cand) {
+                similarity[mid][sid] -= mypow<ll>((kikan - calc_required_days(cand_s[sid], d[tid])), 2);
+                if (chmax(mx, similarity[mid][sid]))
+                    member_to_cand[mid] = sid;
+            }
+
             for (auto &e : g.g[tid]) {
                 in_deg[e.to]--;
                 if (in_deg[e.to] == 0) {
-                    // ランダムなpriority
                     can_begin.emplace(e.to, priority[e.to]);
                 }
             }
         }
+
+        // output estimated s
+        // cout << "#s " << mid + 1 << " ";
+        // rep(i, k) {
+        //     cout << cand_s[member_to_cand[mid]][i] << ' ';
+        // }
+        // cout << endl;
     }
 }
 
