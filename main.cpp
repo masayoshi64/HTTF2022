@@ -433,10 +433,10 @@ int main() {
     vl member_to_day(m);
 
     // sの候補を生成
-    int num_cand = 1000;
+    int num_cand = 10000;
     // vl member_to_cand(m);
-    mat<ll> estimated_s(m);
-    mat<ll> similarity(m, vl(num_cand));
+    mat<ll> estimated_s(m, vl(k));
+    mat<double> similarity(m, vector<double>(num_cand, 1));
     mat<ll> cand_s(num_cand);
     rep(i, num_cand) {
         cand_s[i] = generate_s(k);
@@ -499,11 +499,16 @@ int main() {
             // candidateに重みづけ
             ll kikan = day - member_to_day[mid];
             ll mx = -INF;
+            int cnt = 0;
+            vector<double> tmp_s(k);
+            double similarity_sum = 0;
             rep(sid, num_cand) {
-                similarity[mid][sid] -= mypow<ll>((kikan - calc_required_days(cand_s[sid], d[tid])), 2);
-                if (chmax(mx, similarity[mid][sid]))
-                    estimated_s[mid] = cand_s[sid];
+                similarity[mid][sid] *= exp(-max(0ll, abs(kikan - calc_required_days(cand_s[sid], d[tid]) - 0)));
+                rep(i, k) tmp_s[i] += cand_s[sid][i] * similarity[mid][sid];
+                similarity_sum += similarity[mid][sid];
             }
+            rep(sid, num_cand) similarity[mid][sid] /= similarity_sum;
+            rep(i, k) estimated_s[mid][i] = lround(tmp_s[i] / similarity_sum);
 
             for (auto &e : g.g[tid]) {
                 in_deg[e.to]--;
