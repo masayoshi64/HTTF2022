@@ -401,7 +401,7 @@ int main() {
     //// タスクの処理
 
     // タスクのpriority
-    vl priority(n);
+    vector<double> priority(n);
     auto dfs = [&](int v, auto &dfs) -> ll {
         if (priority[v] > 0)
             return priority[v];
@@ -413,6 +413,7 @@ int main() {
         return res;
     };
     rep(i, n) dfs(i, dfs);
+    rep(i, n) priority[i]; // / vsum(d[i]);
 
     // 使用できるタスク
     priority_queue<Task> can_begin;
@@ -433,7 +434,8 @@ int main() {
 
     // sの候補を生成
     int num_cand = 1000;
-    vl member_to_cand(m);
+    // vl member_to_cand(m);
+    mat<ll> estimated_s(m);
     mat<ll> similarity(m, vl(num_cand));
     mat<ll> cand_s(num_cand);
     rep(i, num_cand) {
@@ -463,7 +465,7 @@ int main() {
             ll mn = INF;
             vl tmp;
             for (int m : can_work_list) {
-                if (chmin(mn, calc_required_days(cand_s[member_to_cand[m]], d[tid]))) {
+                if (chmin(mn, calc_required_days(estimated_s[m], d[tid]))) {
                     if (mid != -1)
                         tmp.pb(mid);
                     mid = m;
@@ -500,7 +502,7 @@ int main() {
             rep(sid, num_cand) {
                 similarity[mid][sid] -= mypow<ll>((kikan - calc_required_days(cand_s[sid], d[tid])), 2);
                 if (chmax(mx, similarity[mid][sid]))
-                    member_to_cand[mid] = sid;
+                    estimated_s[mid] = cand_s[sid];
             }
 
             for (auto &e : g.g[tid]) {
@@ -512,7 +514,7 @@ int main() {
             // output estimated s
             cout << "#s " << mid + 1 << " ";
             rep(i, k) {
-                cout << cand_s[member_to_cand[mid]][i] << ' ';
+                cout << estimated_s[mid][i] << ' ';
             }
             cout << endl;
         }
