@@ -331,14 +331,14 @@ bool operator<(const Member &t1, const Member &t2) {
     return t1.priority < t2.priority;
 };
 
-vl generate_s(int k, double norm = -1) {
+vi generate_s(int k, double norm = -1) {
     vector<double> s(k);
     double sm = 0;
     rep(i, k) {
         s[i] = abs(ndist(mt));
         sm += s[i] * s[i];
     }
-    vl res(k);
+    vi res(k);
     double coef = norm;
     if (coef < 0)
         coef = udist_s(mt);
@@ -349,13 +349,13 @@ vl generate_s(int k, double norm = -1) {
     return res;
 }
 
-ll calc_required_days(vl s, vl d) {
-    ll w = 0;
-    ll k = s.size();
+int calc_required_days(vi s, vi d) {
+    int w = 0;
+    int k = s.size();
     rep(i, k) {
-        w += max(0ll, d[i] - s[i]);
+        w += max(0, d[i] - s[i]);
     }
-    return max(1ll, w);
+    return max(1, w);
 }
 
 int main() {
@@ -363,10 +363,10 @@ int main() {
     ios::sync_with_stdio(0);
     cout << setprecision(30) << fixed;
     // 入力
-    ll n, m, k, r;
+    int n, m, k, r;
     cin >> n >> m >> k >> r;
 
-    mat<ll> d(n, vl(k));
+    mat<int> d(n, vi(k));
     scan(d);
     int ave_num = 1000;
     vector<double> average_time(n);
@@ -414,19 +414,19 @@ int main() {
 
     //// メンバーの処理
     // priority_queue<Member> can_work;
-    vl can_work_list;
+    vi can_work_list;
     rep(i, m) {
         // can_work.emplace(i, 0);
         can_work_list.pb(i);
     }
-    vl member_to_task(m);
-    vl member_to_day(m);
+    vi member_to_task(m);
+    vi member_to_day(m);
 
     // sの候補を生成
     int num_cand = 1000;
-    mat<ll> estimated_s(m, vl(k));
+    mat<int> estimated_s(m, vi(k));
     mat<double> similarity(m, vector<double>(num_cand, 1));
-    vector<mat<ll>> cand_s(m, mat<ll>(num_cand));
+    vector<mat<int>> cand_s(m, mat<int>(num_cand));
     rep(mid, m) {
         rep(i, num_cand) {
             cand_s[mid][i] = generate_s(k);
@@ -437,7 +437,7 @@ int main() {
     mat<int> member_hist(m);
     vi task_actual_time(n);
     // ループ
-    ll day = 0;
+    int day = 0;
     while (true) {
         day++;
         // 出力
@@ -453,8 +453,8 @@ int main() {
             can_begin.pop();
 
             int mid = -1;
-            ll mn = INF;
-            vl tmp;
+            int mn = inf;
+            vi tmp;
             for (int m : can_work_list) {
                 if (chmin(mn, calc_required_days(estimated_s[m], d[tid]))) {
                     if (mid != -1)
