@@ -331,7 +331,7 @@ bool operator<(const Member &t1, const Member &t2) {
     return t1.priority < t2.priority;
 };
 
-vl generate_s(int k) {
+vl generate_s(int k, double norm = -1) {
     vector<double> s(k);
     double sm = 0;
     rep(i, k) {
@@ -339,24 +339,12 @@ vl generate_s(int k) {
         sm += s[i] * s[i];
     }
     vl res(k);
-    double coef = udist_s(mt) / sqrt(sm);
+    double coef = norm;
+    if (coef < 0)
+        coef = udist_s(mt);
+    coef /= sqrt(sm);
     rep(i, k) {
         res[i] = round(coef * s[i]);
-    }
-    return res;
-}
-
-vl generate_d(int k) {
-    vector<double> d(k);
-    double sm = 0;
-    rep(i, k) {
-        d[i] = abs(ndist(mt));
-        sm += d[i] * d[i];
-    }
-    vl res(k);
-    double coef = udist_d(mt) / sqrt(sm);
-    rep(i, k) {
-        res[i] = round(coef * d[i]);
     }
     return res;
 }
@@ -380,13 +368,21 @@ int main() {
 
     mat<ll> d(n, vl(k));
     scan(d);
+    int ave_num = 1000;
+    vector<double> average_time(n);
+    rep(i, n) {
+        rep(j, ave_num) {
+            average_time[i] += calc_required_days(generate_s(k), d[i]);
+        }
+        average_time[i] /= ave_num;
+    }
     Graph<ll> g(n + 1);
     rep(i, r) {
         ll u, v;
         cin >> u >> v;
         u--;
         v--;
-        g.add_directed_edge(u, v, vsum(d[u]));
+        g.add_directed_edge(u, v, average_time[u]);
     }
 
     // 前処理
@@ -401,11 +397,11 @@ int main() {
     //// タスクの処理
 
     // タスクのpriority
-    rep(i, n) g.add_directed_edge(i, n, vsum(d[i]));
+    rep(i, n) g.add_directed_edge(i, n, average_time[i]);
     vector<double> priority(n);
     rrep(i, n) {
         for (auto e : g.g[i]) {
-            chmax(priority[i], priority[e.to] + vsum(d[i]));
+            chmax(priority[i], priority[e.to] + e.cost);
         }
     }
 
@@ -428,17 +424,18 @@ int main() {
 
     // sの候補を生成
     int num_cand = 1000;
-    // vl member_to_cand(m);
     mat<ll> estimated_s(m, vl(k));
     mat<double> similarity(m, vector<double>(num_cand, 1));
-    mat<ll> cand_s(num_cand);
-    rep(i, num_cand) {
-        cand_s[i] = generate_s(k);
+    vector<mat<ll>> cand_s(m, mat<ll>(num_cand));
+    rep(mid, m) {
+        rep(i, num_cand) {
+            cand_s[mid][i] = generate_s(k);
+        }
     }
 
     // メンバーが何回使われたか
-    vi task_cnt(m);
-
+    mat<int> member_hist(m);
+    vi task_actual_time(n);
     // ループ
     ll day = 0;
     while (true) {
@@ -468,7 +465,7 @@ int main() {
                 }
             }
             members.pb(mid);
-            task_cnt[mid]++;
+            member_hist[mid].pb(tid);
             swap(can_work_list, tmp);
 
             // can_work.pop();
@@ -491,17 +488,14 @@ int main() {
 
             // candidateに重みづけ
             ll kikan = day - member_to_day[mid];
-            ll mx = -INF;
-            int cnt = 0;
-            vector<double> tmp_s(k);
-            double similarity_sum = 0;
+            task_actual_time[tid] = kikan;
+            double mx = -inf;
             rep(sid, num_cand) {
-                similarity[mid][sid] *= exp(-max(0ll, abs(kikan - calc_required_days(cand_s[sid], d[tid]) - 0)));
-                rep(i, k) tmp_s[i] += cand_s[sid][i] * similarity[mid][sid];
-                similarity_sum += similarity[mid][sid];
+                similarity[mid][sid] -= abs(kikan - calc_required_days(cand_s[mid][sid], d[tid]));
+                if (chmax(mx, similarity[mid][sid]))
+                    estimated_s[mid] = cand_s[mid][sid];
             }
-            rep(sid, num_cand) similarity[mid][sid] /= similarity_sum;
-            rep(i, k) estimated_s[mid][i] = lround(tmp_s[i] / similarity_sum);
+            // cerr << mx << endl;
 
             for (auto &e : g.g[tid]) {
                 in_deg[e.to]--;
