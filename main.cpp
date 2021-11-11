@@ -368,8 +368,9 @@ int main() {
 
     mat<int> d(n, vi(k));
     scan(d);
-    int ave_num = 1000;
+    int ave_num = 100;
     vector<double> average_time(n);
+    double gamma = 0.98;
     rep(i, n) {
         rep(j, ave_num) {
             average_time[i] += calc_required_days(generate_s(k), d[i]);
@@ -401,7 +402,7 @@ int main() {
     vector<double> priority(n);
     rrep(i, n) {
         for (auto e : g.g[i]) {
-            chmax(priority[i], priority[e.to] + e.cost);
+            chmax(priority[i], priority[e.to] * gamma + e.cost);
         }
     }
 
@@ -439,6 +440,7 @@ int main() {
     // ループ
     int day = 0;
     while (true) {
+        cerr << can_begin.size() << endl;
         day++;
         // 出力
         ll task_num = can_begin.size();
