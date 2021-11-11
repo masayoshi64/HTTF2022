@@ -380,13 +380,13 @@ int main() {
 
     mat<ll> d(n, vl(k));
     scan(d);
-    Graph<ll> g(n);
+    Graph<ll> g(n + 1);
     rep(i, r) {
         ll u, v;
         cin >> u >> v;
         u--;
         v--;
-        g.add_directed_edge(u, v);
+        g.add_directed_edge(u, v, vsum(d[u]));
     }
 
     // 前処理
@@ -401,19 +401,13 @@ int main() {
     //// タスクの処理
 
     // タスクのpriority
+    rep(i, n) g.add_directed_edge(i, n, vsum(d[i]));
     vector<double> priority(n);
-    auto dfs = [&](int v, auto &dfs) -> ll {
-        if (priority[v] > 0)
-            return priority[v];
-        ll res = 1;
-        for (auto e : g.g[v]) {
-            res += dfs(e.to, dfs);
+    rrep(i, n) {
+        for (auto e : g.g[i]) {
+            chmax(priority[i], priority[e.to] + vsum(d[i]));
         }
-        priority[v] = res;
-        return res;
-    };
-    rep(i, n) dfs(i, dfs);
-    rep(i, n) priority[i]; // / vsum(d[i]);
+    }
 
     // 使用できるタスク
     priority_queue<Task> can_begin;
@@ -433,7 +427,7 @@ int main() {
     vl member_to_day(m);
 
     // sの候補を生成
-    int num_cand = 10000;
+    int num_cand = 1000;
     // vl member_to_cand(m);
     mat<ll> estimated_s(m, vl(k));
     mat<double> similarity(m, vector<double>(num_cand, 1));
@@ -493,7 +487,6 @@ int main() {
         for (ll mid : f) {
             mid--;
             ll tid = member_to_task[mid];
-            // can_work.emplace(mid, member_to_day[mid] - vsum(d[tid]));
             can_work_list.pb(mid);
 
             // candidateに重みづけ
