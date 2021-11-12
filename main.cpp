@@ -399,7 +399,7 @@ int main() {
 
     // タスクのpriority
     rep(i, n) g.add_directed_edge(i, n, average_time[i]);
-    vector<double> priority(n);
+    vector<double> priority(n + 1);
     rrep(i, n) {
         for (auto e : g.g[i]) {
             chmax(priority[i], priority[e.to] * gamma + e.cost);
@@ -420,7 +420,7 @@ int main() {
         // can_work.emplace(i, 0);
         can_work_list.pb(i);
     }
-    vi member_to_task(m);
+    vi member_to_task(m, -1);
     vi member_to_day(m);
 
     // sの候補を生成
@@ -440,41 +440,57 @@ int main() {
     // ループ
     int day = 0;
     while (true) {
-        cerr << can_begin.size() << endl;
+        // cerr << can_begin.size() << endl;
         day++;
         // 出力
         ll task_num = can_begin.size();
         ll member_num = can_work_list.size();
         vl tasks;
         vl members;
-
+        vi estimated_end_day(m);
         // 今日割り振るタスク、メンバーをpriorityに従い選定
-        rep(i, min(task_num, member_num)) {
+        priority_queue<Task> atomawasi;
+        rep(i, task_num) {
             ll tid = can_begin.top().id;
-            tasks.pb(tid);
             can_begin.pop();
 
             int mid = -1;
             int mn = inf;
             vi tmp;
-            for (int m : can_work_list) {
-                if (chmin(mn, calc_required_days(estimated_s[m], d[tid]))) {
+            rep(mi, m) {
+
+                int end_day = calc_required_days(estimated_s[mi], d[tid]) + estimated_end_day[mi];
+                if (member_to_task[mi] != -1 && task_num - i <= can_work_list.size()) {
+                    continue;
+                }
+                if (chmin(mn, end_day)) {
                     if (mid != -1)
                         tmp.pb(mid);
-                    mid = m;
+                    mid = mi;
                 } else {
-                    tmp.pb(m);
+                    tmp.pb(mi);
                 }
             }
-            members.pb(mid);
-            member_hist[mid].pb(tid);
+            if (mid == -1) {
+                atomawasi.emplace(tid, priority[tid]);
+                continue;
+            }
+            estimated_end_day[mid] += mn;
+            if (member_to_task[mid] == -1) {
+                members.pb(mid);
+                member_hist[mid].pb(tid);
+                member_to_task[mid] = tid;
+                member_to_day[mid] = day;
+                tasks.pb(tid);
+            } else {
+                tmp.pb(mid);
+                atomawasi.emplace(tid, priority[tid]);
+            }
             swap(can_work_list, tmp);
-
-            // can_work.pop();
-            member_to_task[mid] = tid;
-            member_to_day[mid] = day;
         }
+        swap(can_begin, atomawasi);
         // 出力
+
         output(members, tasks);
 
         // 入力
@@ -486,6 +502,8 @@ int main() {
         for (ll mid : f) {
             mid--;
             ll tid = member_to_task[mid];
+            member_to_task[mid] = -1;
+            estimated_end_day[mid] = day;
             can_work_list.pb(mid);
 
             // candidateに重みづけ
