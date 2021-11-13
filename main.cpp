@@ -445,7 +445,7 @@ int main() {
     vi member_to_day(m);
 
     // sの候補を生成
-    int num_cand = 1000;
+    int num_cand = 7000;
     mat<int> estimated_s(m, vi(k));
     mat<double> similarity(m, vector<double>(num_cand, 1));
     vector<mat<int>> cand_s(m, mat<int>(num_cand));
@@ -536,18 +536,15 @@ int main() {
             vl id = IOTA(similarity[mid]);
             reverse(all(id));
             int end = num_cand;
-            rep(i, 20) {
+            rep(i, 30) {
                 int best_sid = id[i];
-                rrep(j, end - 20, end) {
+                rrep(j, end - 40 + i, end) {
                     int sid = id[j];
                     cand_s[mid][sid] = modify(cand_s[mid][best_sid]);
                     similarity[mid][sid] =
                         calc_similarity(cand_s[mid][sid], member_hist_task[mid], member_hist_day[mid], d);
                 }
-                end -= 10;
-            }
-            if (day % 100 == 0) {
-                cerr << mx << endl;
+                end -= 40 - i;
             }
 
             for (auto &e : g.g[tid]) {
@@ -556,12 +553,6 @@ int main() {
                     can_begin.emplace(e.to, priority[e.to]);
                 }
             }
-            // output estimated s
-            cout << "#s " << mid + 1 << " ";
-            rep(i, k) {
-                cout << estimated_s[mid][i] << ' ';
-            }
-            cout << endl;
         }
     }
 }
