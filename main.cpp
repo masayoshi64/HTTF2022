@@ -358,6 +358,30 @@ int calc_required_days(vi s, vi d) {
     return max(1, w);
 }
 
+double calc_cost(double x, double y) {
+    return (x - y) * (x - y);
+}
+
+double calc_similarity(vi &s, vi &hist_task, vi &hist_day, mat<int> &d) {
+    double res = 0;
+    rep(i, hist_task.size()) {
+        int tid = hist_task[i];
+        int actual_time = hist_day[i];
+        int estimated_time = calc_required_days(s, d[tid]);
+        res -= calc_cost(actual_time, estimated_time);
+    }
+    return res;
+}
+
+vi modify(vi s) {
+    int k = s.size();
+    rep(i, k) {
+        s[i] += 1 - my_rand() % 3;
+        chmax(s[i], 0);
+    }
+    return s;
+}
+
 int main() {
     cin.tie(0);
     ios::sync_with_stdio(0);
@@ -387,11 +411,10 @@ int main() {
     }
 
     // 前処理
-    vl in_deg(n, 0); //, out_deg(n, 0);
+    vl in_deg(n, 0);
     rep(i, n) {
         for (auto e : g.g[i]) {
             in_deg[e.to]++;
-            // out_deg[e.from]++;
         }
     }
 
@@ -414,10 +437,8 @@ int main() {
     }
 
     //// メンバーの処理
-    // priority_queue<Member> can_work;
     vi can_work_list;
     rep(i, m) {
-        // can_work.emplace(i, 0);
         can_work_list.pb(i);
     }
     vi member_to_task(m, -1);
@@ -435,22 +456,19 @@ int main() {
     }
 
     // メンバーが何回使われたか
-    mat<int> member_hist(m);
-    vi task_actual_time(n);
     // ループ
-    int day = 0;
-    while (true) {
+    mat<int> member_hist_task(m);
+    mat<int> member_hist_day(m);
+    rep(day, 2000) {
         // cerr << can_begin.size() << endl;
-        day++;
         // 出力
-        ll task_num = can_begin.size();
-        ll member_num = can_work_list.size();
         vl tasks;
         vl members;
-        vi estimated_end_day(m);
         // 今日割り振るタスク、メンバーをpriorityに従い選定
         priority_queue<Task> atomawasi;
-        rep(i, task_num) {
+        vi estimated_end_day(m);
+
+        while (!can_begin.empty()) {
             ll tid = can_begin.top().id;
             can_begin.pop();
 
@@ -458,9 +476,8 @@ int main() {
             int mn = inf;
             vi tmp;
             rep(mi, m) {
-
                 int end_day = calc_required_days(estimated_s[mi], d[tid]) + estimated_end_day[mi];
-                if (member_to_task[mi] != -1 && task_num - i <= can_work_list.size()) {
+                if (member_to_task[mi] != -1 && can_begin.size() + 1 <= can_work_list.size()) {
                     continue;
                 }
                 if (chmin(mn, end_day)) {
@@ -478,7 +495,6 @@ int main() {
             estimated_end_day[mid] += mn;
             if (member_to_task[mid] == -1) {
                 members.pb(mid);
-                member_hist[mid].pb(tid);
                 member_to_task[mid] = tid;
                 member_to_day[mid] = day;
                 tasks.pb(tid);
@@ -506,16 +522,33 @@ int main() {
             estimated_end_day[mid] = day;
             can_work_list.pb(mid);
 
-            // candidateに重みづけ
             ll kikan = day - member_to_day[mid];
-            task_actual_time[tid] = kikan;
+            member_hist_task[mid].pb(tid);
+            member_hist_day[mid].pb(kikan);
+
+            // candidateに重みづけ
             double mx = -inf;
             rep(sid, num_cand) {
-                similarity[mid][sid] -= abs(kikan - calc_required_days(cand_s[mid][sid], d[tid]));
+                similarity[mid][sid] -= calc_cost(kikan, calc_required_days(cand_s[mid][sid], d[tid]));
                 if (chmax(mx, similarity[mid][sid]))
                     estimated_s[mid] = cand_s[mid][sid];
             }
-            // cerr << mx << endl;
+            vl id = IOTA(similarity[mid]);
+            reverse(all(id));
+            int end = num_cand;
+            rep(i, 20) {
+                int best_sid = id[i];
+                rrep(j, end - 20, end) {
+                    int sid = id[j];
+                    cand_s[mid][sid] = modify(cand_s[mid][best_sid]);
+                    similarity[mid][sid] =
+                        calc_similarity(cand_s[mid][sid], member_hist_task[mid], member_hist_day[mid], d);
+                }
+                end -= 10;
+            }
+            if (day % 100 == 0) {
+                cerr << mx << endl;
+            }
 
             for (auto &e : g.g[tid]) {
                 in_deg[e.to]--;
